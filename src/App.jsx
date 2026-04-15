@@ -1,5 +1,5 @@
 import React, { Suspense, useMemo, useRef, useState, useEffect } from 'react'
-import { Canvas, useFrame } from '@react-three/fiber'
+import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { 
   Environment, 
   ContactShadows, 
@@ -7,6 +7,7 @@ import {
   OrbitControls,
   Html,
   useProgress,
+  Center,
   Line
 } from '@react-three/drei'
 import * as THREE from 'three'
@@ -29,108 +30,72 @@ function Loader() {
   )
 }
 
-function DiameterDimension({ box }) {
+function RectangularDimension({ box }) {
   const size = box.getSize(new THREE.Vector3())
   const boxCenter = box.getCenter(new THREE.Vector3())
 
-  const modelRadius = Math.max(size.x, size.z) / 2
-  const pad = modelRadius * 0.18
-  const outerRadius = modelRadius + pad
+  // Width (X) and Depth (Z) dimensions
+  const width = size.x
+  const depth = size.z
 
+  // Ground level or slightly above the bounding box
+  const cy = boxCenter.y - size.y / 2 + 0.05
   const cx = boxCenter.x
   const cz = boxCenter.z
-  const cyCircle = boxCenter.y + size.y * 0.5 + 0.008
 
-  // Outer dashed circle points
-  const circlePoints = useMemo(() => {
-    const segments = 96
-    const pts = []
-    for (let i = 0; i <= segments; i++) {
-      const angle = (i / segments) * Math.PI * 2
-      pts.push(new THREE.Vector3(
-        cx + Math.cos(angle) * outerRadius,
-        cyCircle,
-        cz + Math.sin(angle) * outerRadius
-      ))
-    }
-    return pts
-  }, [cx, cz, cyCircle, outerRadius])
+  // Margins for lines so they sit outside the model
+  const marginOffset = Math.max(width, depth) * 0.15
 
-  // Arrow sizing
-  const arrowRad    = outerRadius * 0.028
-  const arrowHeight = outerRadius * 0.09
+  // Points for Width (front)
+  const zFront = cz + depth / 2 + marginOffset
+  const xLeft = cx - width / 2
+  const xRight = cx + width / 2
 
-  // Two tick marks on the circle rim at left (180°) and right (0°)
-  // pointing inward to show the diameter span
-  const rimLeft  = new THREE.Vector3(cx - outerRadius, cyCircle, cz)
-  const rimRight = new THREE.Vector3(cx + outerRadius, cyCircle, cz)
-
-  // Short inward tick lines at each rim point
-  const tickLen = outerRadius * 0.12
-  const tickLeftA  = new THREE.Vector3(cx - outerRadius,            cyCircle, cz)
-  const tickLeftB  = new THREE.Vector3(cx - outerRadius + tickLen,  cyCircle, cz)
-  const tickRightA = new THREE.Vector3(cx + outerRadius,            cyCircle, cz)
-  const tickRightB = new THREE.Vector3(cx + outerRadius - tickLen,  cyCircle, cz)
-
-  // Leader line: starts at the right rim, extends further right, then label
-  const leaderStart = new THREE.Vector3(cx + outerRadius,                        cyCircle, cz)
-  const leaderEnd   = new THREE.Vector3(cx + outerRadius + outerRadius * 0.55,   cyCircle, cz)
+  // Points for Depth (side)
+  const xSide = cx + width / 2 + marginOffset
+  const zBack = cz - depth / 2
+  const zFrontEdge = cz + depth / 2
 
   return (
     <group>
-      {/* Dashed circle — outside the model perimeter */}
-      <Line
-        points={circlePoints}
-        color="#1760a5"
-        lineWidth={1.6}
-        dashed
-        dashSize={outerRadius * 0.06}
-        gapSize={outerRadius * 0.04}
-      />
+      {/* Front width line */}
+      <Line points={[[xLeft, cy, zFront], [xRight, cy, zFront]]} color="#d32f2f" lineWidth={2} />
+      {/* Small ticks for front width */}
+      <Line points={[[xLeft, cy, zFront - 0.05], [xLeft, cy, zFront + 0.05]]} color="#d32f2f" lineWidth={2} />
+      <Line points={[[xRight, cy, zFront - 0.05], [xRight, cy, zFront + 0.05]]} color="#d32f2f" lineWidth={2} />
+      
+      <Html position={[cx, cy, zFront + 0.08]} center className="dimension-label">
+        {(width * 100).toFixed(1)} cm
+      </Html>
 
-      {/* Inward tick/arrow at LEFT rim */}
-      <Line points={[tickLeftA, tickLeftB]} color="#1760a5" lineWidth={2} />
-      <mesh position={rimLeft} rotation={[0, 0, -Math.PI / 2]}>
-        <mesh position={[0, arrowHeight / 2, 0]}>
-          <coneGeometry args={[arrowRad, arrowHeight, 16]} />
-          <meshBasicMaterial color="#1760a5" />
-        </mesh>
-      </mesh>
+      {/* Side depth line */}
+      <Line points={[[xSide, cy, zBack], [xSide, cy, zFrontEdge]]} color="#d32f2f" lineWidth={2} />
+      {/* Small ticks for side depth */}
+      <Line points={[[xSide - 0.05, cy, zBack], [xSide + 0.05, cy, zBack]]} color="#d32f2f" lineWidth={2} />
+      <Line points={[[xSide - 0.05, cy, zFrontEdge], [xSide + 0.05, cy, zFrontEdge]]} color="#d32f2f" lineWidth={2} />
 
-      {/* Inward tick/arrow at RIGHT rim */}
-      <Line points={[tickRightA, tickRightB]} color="#1760a5" lineWidth={2} />
-      <mesh position={rimRight} rotation={[0, 0, Math.PI / 2]}>
-        <mesh position={[0, arrowHeight / 2, 0]}>
-          <coneGeometry args={[arrowRad, arrowHeight, 16]} />
-          <meshBasicMaterial color="#1760a5" />
-        </mesh>
-      </mesh>
-
-      {/* Leader line extending outward to the label */}
-      <Line points={[leaderStart, leaderEnd]} color="#1760a5" lineWidth={1.8} />
-
-      {/* Label at the end of the leader, fully outside the model */}
-      <Html
-        position={[leaderEnd.x + outerRadius * 0.04, leaderEnd.y, leaderEnd.z]}
-        center={false}
-        zIndexRange={[100, 0]}
-        style={{ transform: 'translateY(-50%)' }}
-      >
-        <div className="dimension-label">⌀ 12″ (30 cm)</div>
+      <Html position={[xSide + 0.08, cy, cz]} center className="dimension-label">
+        {(depth * 100).toFixed(1)} cm
       </Html>
     </group>
   )
 }
 
-function Model({ url, ...props }) {
+function Model({ url, onCentered, ...props }) {
   const { scene } = useGLTF(url)
   const groupRef = useRef()
-  const { box, center } = useMemo(() => {
+  const { box, center, size } = useMemo(() => {
     const clonedScene = scene.clone()
     const box = new THREE.Box3().setFromObject(clonedScene)
     const center = box.getCenter(new THREE.Vector3())
-    return { box, center }
+    const size = box.getSize(new THREE.Vector3())
+    return { box, center, size }
   }, [scene])
+
+  // Report the bounding info upward once computed
+  useEffect(() => {
+    if (onCentered) onCentered({ center, size })
+  }, [center, size, onCentered])
 
   useFrame(() => {
     if (groupRef.current) {
@@ -143,9 +108,10 @@ function Model({ url, ...props }) {
   return (
     <group {...props}>
       <group ref={groupRef} scale={[0, 0, 0]}>
+        {/* Offset so the geometric center of the model sits at (0,0,0) */}
         <group position={[-center.x, -center.y, -center.z]}>
           <primitive object={scene} />
-          <DiameterDimension box={box} />
+          <RectangularDimension box={box} />
         </group>
       </group>
     </group>
@@ -155,7 +121,7 @@ function Model({ url, ...props }) {
 // --- MAIN APP COMPONENT ---
 
 export default function App() {
-  const modelUrl = '/Cutting board.glb'
+  const modelUrl = '/American outdoor grill.glb'
   const arViewerRef = useRef(null)
   const [showQR, setShowQR] = useState(false)
   const [currentUrl, setCurrentUrl] = useState('')
@@ -196,9 +162,9 @@ export default function App() {
       {/* Breadcrumbs */}
       <nav className="breadcrumbs">
         <span>Products</span><span>/</span>
-        <span>Kitchen Accessories</span><span>/</span>
-        <span>Preparation Tools</span><span>/</span>
-        <span>Solid Wood Cutting Board</span>
+        <span>Outdoor Living</span><span>/</span>
+        <span>Gas Grills</span><span>/</span>
+        <span>American Outdoor Grill</span>
       </nav>
 
       <main className="product-layout">
@@ -222,21 +188,29 @@ export default function App() {
 
         {/* 3D Viewer */}
         <section className="viewer-container">
-          <Canvas shadows camera={{ position: [0, 5.5, 0.5], fov: 38 }} gl={{ toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.0 }}>
-            <color attach="background" args={['#f9f9f9']} />
-            <ambientLight intensity={0.4} />
-            <directionalLight position={[5, 8, 5]} intensity={1.2} castShadow shadow-mapSize={[1024, 1024]} />
-            <directionalLight position={[-3, 2, -2]} intensity={0.3} color="#ffeedd" />
+          <Canvas shadows camera={{ position: [0, 1.5, 3], fov: 40 }} gl={{ toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.1 }}>
+            <color attach="background" args={['#f5f5f5']} />
+            <ambientLight intensity={0.2} />
+            
+            {/* Key light for specular highlights on metal */}
+            <directionalLight position={[5, 10, 3]} intensity={0.8} castShadow shadow-mapSize={[2048, 2048]} />
+            {/* Soft fill light */}
+            <directionalLight position={[-5, 5, -5]} intensity={0.3} color="#e0e0e0" />
+
             <Suspense fallback={<Loader />}>
-              <Model url={modelUrl} scale={4.55} position={[0, -0.2, 0]} />
-              <ContactShadows position={[0, -0.6, 0]} opacity={0.15} scale={10} blur={2.5} far={4} color="#000" />
-              <Environment preset="apartment" environmentIntensity={0.6} />
+              {/* Model sits at origin (0,0,0) — no position offset */}
+              <Model url={modelUrl} />
+              <ContactShadows position={[0, -0.5, 0]} opacity={0.4} scale={20} blur={1.5} far={4} color="#000" />
+              
+              {/* San Giuseppe Bridge HDR for reflections only — NOT shown as background */}
+              <Environment files="/san_giuseppe_bridge_1k.hdr" environmentIntensity={1.8} />
             </Suspense>
             <OrbitControls
               makeDefault
+              target={[0, 0, 0]}
               enablePan={false}
-              minDistance={3}
-              maxDistance={9}
+              minDistance={1}
+              maxDistance={12}
             />
           </Canvas>
 
@@ -259,14 +233,14 @@ export default function App() {
 
         {/* Product Info */}
         <section className="product-info-panel">
-          <div className="brand-series">BOSCH WOODEN</div>
-          <h1>Solid Oak Cutting Board, Natural</h1>
-          <div className="product-desc">Round 30 cm (12″) · Solid Oak</div>
+          <div className="brand-series">PREMIUM OUTDOOR</div>
+          <h1>American Outdoor Grill, Stainless Steel</h1>
+          <div className="product-desc">Built-in Premium Gas Grill · High Performance</div>
 
           <div className="price-container">
-            <span className="price-currency">Rs.</span>2,499
+            <span className="price-currency">$</span>2,499.00
           </div>
-          <div className="price-sub">Price incl. of all taxes</div>
+          <div className="price-sub">Includes standard shipping</div>
 
           <div className="rating-row">
             <div className="rating-stars">★★★★★</div>
@@ -303,9 +277,9 @@ export default function App() {
       <div className="footer-desc">
         <h3>Product details</h3>
         <p>
-          A clean expression that fits right in, in the kitchen or wherever you place it.
-          Smooth-finish solid oak crafted with a focus on durability. Ideal for chopping,
-          serving, and adding a touch of natural elegance to your culinary workspace.
+          Bring the ultimate outdoor cooking experience to your backyard. 
+          Crafted from heavy-duty 304 stainless steel with advanced burner technology, 
+          this grill delivers high performance and durability for years of family barbecues.
         </p>
       </div>
 
@@ -314,7 +288,7 @@ export default function App() {
         <div className="qr-overlay" onClick={() => setShowQR(false)}>
           <div className="qr-card" onClick={e => e.stopPropagation()}>
             <h2>Scan for AR</h2>
-            <p>Open your camera and scan the code to place this board on your kitchen counter!</p>
+            <p>Open your camera and scan the code to place this grill in your backyard!</p>
             <div className="qr-image-wrap">
               <img
                 src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=0&data=${encodeURIComponent(currentUrl)}`}
@@ -335,4 +309,4 @@ export default function App() {
   )
 }
 
-useGLTF.preload('/Cutting board.glb')
+useGLTF.preload('/American outdoor grill.glb')
