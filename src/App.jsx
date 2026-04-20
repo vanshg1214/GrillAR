@@ -131,9 +131,17 @@ export default function App() {
   }, [])
 
   const handleARClick = () => {
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
-    if (!isMobile) { setShowQR(true); return }
-    if (arViewerRef.current) arViewerRef.current.activateAR()
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || 
+                     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+    
+    if (!isMobile) { 
+      setShowQR(true)
+      return 
+    }
+    
+    if (arViewerRef.current) {
+      arViewerRef.current.activateAR()
+    }
   }
 
   return (
@@ -202,8 +210,8 @@ export default function App() {
               <Model url={modelUrl} />
               <ContactShadows position={[0, -0.5, 0]} opacity={0.4} scale={20} blur={1.5} far={4} color="#000" />
               
-              {/* San Giuseppe Bridge HDR for reflections only — NOT shown as background */}
-              <Environment files="/san_giuseppe_bridge_1k.hdr" environmentIntensity={1.8} />
+              {/* Cedar Bridge Sunset HDR for premium reflections */}
+              <Environment files="/cedar_bridge_sunset_1_4k.hdr" environmentIntensity={1.8} />
             </Suspense>
             <OrbitControls
               makeDefault
