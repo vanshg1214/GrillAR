@@ -111,7 +111,7 @@ function Model({ url, onCentered, ...props }) {
         {/* Offset so the geometric center of the model sits at (0,0,0) */}
         <group position={[-center.x, -center.y, -center.z]}>
           <primitive object={scene} />
-          <RectangularDimension box={box} />
+          {!props.hideDimensions && <RectangularDimension box={box} />}
         </group>
       </group>
     </group>
@@ -207,7 +207,7 @@ export default function App() {
 
             <Suspense fallback={<Loader />}>
               {/* Model sits at origin (0,0,0) — no position offset */}
-              <Model url={modelUrl} />
+              <Model url={modelUrl} hideDimensions={showQR} />
               <ContactShadows position={[0, -0.5, 0]} opacity={0.4} scale={20} blur={1.5} far={4} color="#000" />
               
               {/* Cedar Bridge Sunset HDR for premium reflections */}
