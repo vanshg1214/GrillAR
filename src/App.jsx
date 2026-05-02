@@ -120,7 +120,7 @@ function Model({ url, onCentered, ...props }) {
 
 // --- MAIN APP COMPONENT ---
 
-export default function App() {
+function MainView() {
   const modelUrl = '/American outdoor grill.glb'
   const arViewerRef = useRef(null)
   const [showQR, setShowQR] = useState(false)
@@ -315,6 +315,110 @@ export default function App() {
       <model-viewer ref={arViewerRef} src={modelUrl} ar ar-scale="fixed" ar-modes="scene-viewer webxr quick-look" style={{ display: 'none' }} />
     </div>
   )
+}
+
+function EmbedView() {
+  const modelUrl = '/American outdoor grill.glb'
+  const arViewerRef = useRef(null)
+  const [showQR, setShowQR] = useState(false)
+  const [currentUrl, setCurrentUrl] = useState('')
+
+  useEffect(() => {
+    setCurrentUrl(window.location.href)
+  }, [])
+
+  const handleARClick = () => {
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || 
+                     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+    
+    if (!isMobile) { 
+      setShowQR(true)
+      return 
+    }
+    
+    if (arViewerRef.current) {
+      arViewerRef.current.activateAR()
+    }
+  }
+
+  return (
+    <div style={{ width: '100vw', height: '100vh', margin: 0, padding: 0, overflow: 'hidden', position: 'relative' }}>
+      <Canvas shadows camera={{ position: [0, 1.5, 3], fov: 40 }} gl={{ toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.1 }}>
+        <color attach="background" args={['#f5f5f5']} />
+        <ambientLight intensity={0.2} />
+        <directionalLight position={[5, 10, 3]} intensity={0.8} castShadow shadow-mapSize={[2048, 2048]} />
+        <directionalLight position={[-5, 5, -5]} intensity={0.3} color="#e0e0e0" />
+
+        <Suspense fallback={<Loader />}>
+          <Model url={modelUrl} hideDimensions={showQR} />
+          <ContactShadows position={[0, -0.5, 0]} opacity={0.4} scale={20} blur={1.5} far={4} color="#000" />
+          <Environment files="/cedar_bridge_sunset_1_4k.hdr" environmentIntensity={1.8} />
+        </Suspense>
+        <OrbitControls makeDefault target={[0, 0, 0]} enablePan={false} minDistance={1} maxDistance={12} />
+      </Canvas>
+
+      <button onClick={handleARClick} style={{
+        position: 'absolute',
+        bottom: '20px',
+        right: '20px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        padding: '12px 20px',
+        backgroundColor: '#fff',
+        color: '#000',
+        border: 'none',
+        borderRadius: '30px',
+        fontWeight: '600',
+        fontSize: '14px',
+        boxShadow: '0 4px 15px rgba(0,0,0,0.1)',
+        cursor: 'pointer',
+        zIndex: 10
+      }}>
+        <svg width="18" height="18" fill="currentColor" viewBox="0 0 16 16">
+          <path d="M0 1.5A1.5 1.5 0 0 1 1.5 0h2A1.5 1.5 0 0 1 5 1.5v1A1.5 1.5 0 0 1 3.5 4h-2A1.5 1.5 0 0 1 0 2.5v-1zm11 0A1.5 1.5 0 0 1 12.5 0h2A1.5 1.5 0 0 1 16 1.5v1A1.5 1.5 0 0 1 14.5 4h-2A1.5 1.5 0 0 1 11 2.5v-1zm-11 11A1.5 1.5 0 0 1 1.5 11h2A1.5 1.5 0 0 1 5 12.5v1A1.5 1.5 0 0 1 3.5 16h-2A1.5 1.5 0 0 1 0 14.5v-1zm11 0A1.5 1.5 0 0 1 12.5 11h2a1.5 1.5 0 0 1 1.5 1.5v1a1.5 1.5 0 0 1-1.5 1.5h-2a1.5 1.5 0 0 1-1.5-1.5v-1z"/>
+        </svg>
+        View in AR
+      </button>
+
+      {showQR && (
+        <div className="qr-overlay" onClick={() => setShowQR(false)}>
+          <div className="qr-card" onClick={e => e.stopPropagation()}>
+            <h2>Scan for AR</h2>
+            <p>Open your camera and scan the code to place this grill in your backyard!</p>
+            <div className="qr-image-wrap">
+              <img
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=0&data=${encodeURIComponent(currentUrl)}`}
+                alt="QR Code"
+                width="200"
+                height="200"
+                style={{ borderRadius: '8px' }}
+              />
+            </div>
+            <button className="add-to-cart" onClick={() => setShowQR(false)}>Got it</button>
+          </div>
+        </div>
+      )}
+
+      <model-viewer ref={arViewerRef} src={modelUrl} ar ar-scale="fixed" ar-modes="scene-viewer webxr quick-look" style={{ display: 'none' }} />
+    </div>
+  )
+}
+
+export default function App() {
+  const [path, setPath] = useState(window.location.pathname)
+
+  useEffect(() => {
+    const handlePopState = () => setPath(window.location.pathname)
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [])
+
+  if (path === '/embed') {
+    return <EmbedView />
+  }
+
+  return <MainView />
 }
 
 useGLTF.preload('/American outdoor grill.glb')
