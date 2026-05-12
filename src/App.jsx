@@ -8,7 +8,8 @@ import {
   Html,
   useProgress,
   Center,
-  Line
+  Line,
+  useAnimations
 } from '@react-three/drei'
 import * as THREE from 'three'
 
@@ -81,9 +82,54 @@ function RectangularDimension({ box }) {
   )
 }
 
-function Model({ url, onCentered, ...props }) {
-  const { scene } = useGLTF(url)
+function Model({ url, onCentered, playAnimation, ...props }) {
+  const { scene, animations } = useGLTF(url)
   const groupRef = useRef()
+  const { actions, names } = useAnimations(animations, scene)
+  const isOpenRef = useRef(false) // Initially Closed (at the end of animation)
+
+  // Initially set to the end of the animation (Closed state)
+  useEffect(() => {
+    if (names.length > 0) {
+      names.forEach(name => {
+        const action = actions[name]
+        if (action) {
+          action.reset().play()
+          action.paused = true
+          action.time = action.getClip().duration
+        }
+      })
+    }
+  }, [actions, names])
+
+  useEffect(() => {
+    if (playAnimation > 0 && names.length > 0) {
+      const currentlyOpen = isOpenRef.current
+      
+      names.forEach(name => {
+        const action = actions[name]
+        if (action) {
+          action.paused = false
+          action.setLoop(THREE.LoopOnce)
+          action.clampWhenFinished = true
+          
+          if (currentlyOpen) {
+            // Open -> Close: Play forward (starts from 0)
+            action.setEffectiveTimeScale(1)
+            action.paused = false
+            action.play()
+          } else {
+            // Closed -> Open: Play backward (starts from duration)
+            action.setEffectiveTimeScale(-1)
+            action.paused = false
+            action.play()
+          }
+        }
+      })
+      isOpenRef.current = !currentlyOpen
+    }
+  }, [playAnimation, actions, names])
+
   const { box, center, size } = useMemo(() => {
     const clonedScene = scene.clone()
     const box = new THREE.Box3().setFromObject(clonedScene)
@@ -121,13 +167,43 @@ function Model({ url, onCentered, ...props }) {
 // --- MAIN APP COMPONENT ---
 
 function MainView() {
-  const modelUrl = '/American outdoor grill.glb'
+  const modelUrl = '/American outdoor animation grill.glb'
   const arViewerRef = useRef(null)
   const [showQR, setShowQR] = useState(false)
   const [currentUrl, setCurrentUrl] = useState('')
+  const [playAnimation, setPlayAnimation] = useState(0)
 
   useEffect(() => {
     setCurrentUrl(window.location.href)
+  }, [])
+
+  // AR Animation Loop Logic
+  useEffect(() => {
+    const viewer = arViewerRef.current
+    if (!viewer) return
+    let loopTimeout
+    const playNextCycle = () => {
+      const animations = viewer.availableAnimations
+      if (animations && animations.length > 0) {
+        viewer.animationName = animations[0]
+        viewer.play()
+        const duration = viewer.duration || 2
+        setTimeout(() => {
+          viewer.pause()
+          loopTimeout = setTimeout(playNextCycle, 3000)
+        }, duration * 1000)
+      }
+    }
+    viewer.addEventListener('ar-status', (e) => {
+      if (e.detail.status === 'session-started') {
+        setTimeout(playNextCycle, 3000)
+      } else if (e.detail.status === 'not-presenting') {
+        clearTimeout(loopTimeout)
+      }
+    })
+    return () => {
+      clearTimeout(loopTimeout)
+    }
   }, [])
 
   const handleARClick = () => {
@@ -196,7 +272,7 @@ function MainView() {
 
         {/* 3D Viewer */}
         <section className="viewer-container">
-          <Canvas shadows camera={{ position: [0, 1.5, 3], fov: 40 }} gl={{ toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.1 }}>
+          <Canvas shadows camera={{ position: [0, 1, 2], fov: 40 }} gl={{ toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.1 }}>
             <color attach="background" args={['#f5f5f5']} />
             <ambientLight intensity={0.2} />
             
@@ -207,7 +283,7 @@ function MainView() {
 
             <Suspense fallback={<Loader />}>
               {/* Model sits at origin (0,0,0) — no position offset */}
-              <Model url={modelUrl} hideDimensions={showQR} />
+              <Model url={modelUrl} hideDimensions={showQR} playAnimation={playAnimation} />
               <ContactShadows position={[0, -0.5, 0]} opacity={0.4} scale={20} blur={1.5} far={4} color="#000" />
               
               {/* Cedar Bridge Sunset HDR for premium reflections */}
@@ -229,6 +305,12 @@ function MainView() {
                 <path d="M5 4.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5zM5 7a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5A.5.5 0 0 1 5 7zm0 2.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5z"/>
               </svg>
               All media
+            </button>
+            <button className="action-pill" onClick={() => setPlayAnimation(prev => prev + 1)}>
+              <svg width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
+                <path d="M11.596 8.697l-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/>
+              </svg>
+              Play Animation
             </button>
             <button className="action-pill" onClick={handleARClick}>
               <svg width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
@@ -318,13 +400,42 @@ function MainView() {
 }
 
 function EmbedView() {
-  const modelUrl = '/American outdoor grill.glb'
+  const modelUrl = '/American outdoor animation grill.glb'
   const arViewerRef = useRef(null)
   const [showQR, setShowQR] = useState(false)
   const [currentUrl, setCurrentUrl] = useState('')
+  const [playAnimation, setPlayAnimation] = useState(0)
 
   useEffect(() => {
     setCurrentUrl(window.location.href)
+  }, [])
+
+  useEffect(() => {
+    const viewer = arViewerRef.current
+    if (!viewer) return
+    let loopTimeout
+    const playNextCycle = () => {
+      const animations = viewer.availableAnimations
+      if (animations && animations.length > 0) {
+        viewer.animationName = animations[0]
+        viewer.play()
+        const duration = viewer.duration || 2
+        setTimeout(() => {
+          viewer.pause()
+          loopTimeout = setTimeout(playNextCycle, 3000)
+        }, duration * 1000)
+      }
+    }
+    viewer.addEventListener('ar-status', (e) => {
+      if (e.detail.status === 'session-started') {
+        loopTimeout = setTimeout(playNextCycle, 3000)
+      } else if (e.detail.status === 'not-presenting') {
+        clearTimeout(loopTimeout)
+      }
+    })
+    return () => {
+      clearTimeout(loopTimeout)
+    }
   }, [])
 
   const handleARClick = () => {
@@ -343,43 +454,69 @@ function EmbedView() {
 
   return (
     <div style={{ width: '100vw', height: '100vh', margin: 0, padding: 0, overflow: 'hidden', position: 'relative' }}>
-      <Canvas shadows camera={{ position: [0, 1.5, 3], fov: 40 }} gl={{ toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.1 }}>
+      <Canvas shadows camera={{ position: [0, 1, 2], fov: 40 }} gl={{ toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.1 }}>
         <color attach="background" args={['#f5f5f5']} />
         <ambientLight intensity={0.2} />
         <directionalLight position={[5, 10, 3]} intensity={0.8} castShadow shadow-mapSize={[2048, 2048]} />
         <directionalLight position={[-5, 5, -5]} intensity={0.3} color="#e0e0e0" />
 
         <Suspense fallback={<Loader />}>
-          <Model url={modelUrl} hideDimensions={showQR} />
+          <Model url={modelUrl} hideDimensions={showQR} playAnimation={playAnimation} />
           <ContactShadows position={[0, -0.5, 0]} opacity={0.4} scale={20} blur={1.5} far={4} color="#000" />
           <Environment files="/cedar_bridge_sunset_1_4k.hdr" environmentIntensity={1.8} />
         </Suspense>
         <OrbitControls makeDefault target={[0, 0, 0]} enablePan={false} minDistance={1} maxDistance={12} />
       </Canvas>
 
-      <button onClick={handleARClick} style={{
+      <div style={{
         position: 'absolute',
         bottom: '20px',
         right: '20px',
         display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-        padding: '12px 20px',
-        backgroundColor: '#fff',
-        color: '#000',
-        border: 'none',
-        borderRadius: '30px',
-        fontWeight: '600',
-        fontSize: '14px',
-        boxShadow: '0 4px 15px rgba(0,0,0,0.1)',
-        cursor: 'pointer',
+        flexDirection: 'column',
+        gap: '10px',
         zIndex: 10
       }}>
-        <svg width="18" height="18" fill="currentColor" viewBox="0 0 16 16">
-          <path d="M0 1.5A1.5 1.5 0 0 1 1.5 0h2A1.5 1.5 0 0 1 5 1.5v1A1.5 1.5 0 0 1 3.5 4h-2A1.5 1.5 0 0 1 0 2.5v-1zm11 0A1.5 1.5 0 0 1 12.5 0h2A1.5 1.5 0 0 1 16 1.5v1A1.5 1.5 0 0 1 14.5 4h-2A1.5 1.5 0 0 1 11 2.5v-1zm-11 11A1.5 1.5 0 0 1 1.5 11h2A1.5 1.5 0 0 1 5 12.5v1A1.5 1.5 0 0 1 3.5 16h-2A1.5 1.5 0 0 1 0 14.5v-1zm11 0A1.5 1.5 0 0 1 12.5 11h2a1.5 1.5 0 0 1 1.5 1.5v1a1.5 1.5 0 0 1-1.5 1.5h-2a1.5 1.5 0 0 1-1.5-1.5v-1z"/>
-        </svg>
-        View in AR
-      </button>
+        <button onClick={() => setPlayAnimation(prev => prev + 1)} style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          padding: '12px 20px',
+          backgroundColor: '#fff',
+          color: '#000',
+          border: 'none',
+          borderRadius: '30px',
+          fontWeight: '600',
+          fontSize: '14px',
+          boxShadow: '0 4px 15px rgba(0,0,0,0.1)',
+          cursor: 'pointer'
+        }}>
+          <svg width="18" height="18" fill="currentColor" viewBox="0 0 16 16">
+            <path d="M11.596 8.697l-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/>
+          </svg>
+          Play Animation
+        </button>
+        
+        <button onClick={handleARClick} style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          padding: '12px 20px',
+          backgroundColor: '#000',
+          color: '#fff',
+          border: 'none',
+          borderRadius: '30px',
+          fontWeight: '600',
+          fontSize: '14px',
+          boxShadow: '0 4px 15px rgba(0,0,0,0.1)',
+          cursor: 'pointer'
+        }}>
+          <svg width="18" height="18" fill="currentColor" viewBox="0 0 16 16">
+            <path d="M0 1.5A1.5 1.5 0 0 1 1.5 0h2A1.5 1.5 0 0 1 5 1.5v1A1.5 1.5 0 0 1 3.5 4h-2A1.5 1.5 0 0 1 0 2.5v-1zm11 0A1.5 1.5 0 0 1 12.5 0h2A1.5 1.5 0 0 1 16 1.5v1A1.5 1.5 0 0 1 14.5 4h-2A1.5 1.5 0 0 1 11 2.5v-1zm-11 11A1.5 1.5 0 0 1 1.5 11h2A1.5 1.5 0 0 1 5 12.5v1A1.5 1.5 0 0 1 3.5 16h-2A1.5 1.5 0 0 1 0 14.5v-1zm11 0A1.5 1.5 0 0 1 12.5 11h2a1.5 1.5 0 0 1 1.5 1.5v1a1.5 1.5 0 0 1-1.5 1.5h-2a1.5 1.5 0 0 1-1.5-1.5v-1z"/>
+          </svg>
+          View in AR
+        </button>
+      </div>
 
       {showQR && (
         <div className="qr-overlay" onClick={() => setShowQR(false)}>
@@ -421,4 +558,4 @@ export default function App() {
   return <MainView />
 }
 
-useGLTF.preload('/American outdoor grill.glb')
+useGLTF.preload('/American outdoor animation grill.glb')
