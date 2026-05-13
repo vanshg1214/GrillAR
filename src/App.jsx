@@ -167,7 +167,7 @@ function Model({ url, onCentered, playAnimation, ...props }) {
 // --- MAIN APP COMPONENT ---
 
 function MainView() {
-  const modelUrl = '/American outdoor animation grill.glb?v=5'
+  const modelUrl = '/grill_fixed_v6.glb'
   const arViewerRef = useRef(null)
   const [showQR, setShowQR] = useState(false)
   const [currentUrl, setCurrentUrl] = useState('')
@@ -444,7 +444,7 @@ function MainView() {
 }
 
 function EmbedView() {
-  const modelUrl = '/American outdoor animation grill.glb?v=5'
+  const modelUrl = '/grill_fixed_v6.glb'
   const arViewerRef = useRef(null)
   const [showQR, setShowQR] = useState(false)
   const [currentUrl, setCurrentUrl] = useState('')
@@ -638,4 +638,4 @@ export default function App() {
   return <MainView />
 }
 
-useGLTF.preload('/American outdoor animation grill.glb')
+useGLTF.preload('/grill_fixed_v6.glb')
