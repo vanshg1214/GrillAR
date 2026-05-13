@@ -194,6 +194,18 @@ function MainView() {
         }, duration * 1000)
       }
     }
+    viewer.addEventListener('load', () => {
+      const animations = viewer.availableAnimations
+      if (animations && animations.length > 0) {
+        viewer.animationName = animations[0]
+        // Small delay to ensure duration is calculated
+        setTimeout(() => {
+          viewer.currentTime = viewer.duration
+          viewer.pause()
+        }, 100)
+      }
+    })
+
     viewer.addEventListener('ar-status', (e) => {
       if (e.detail.status === 'session-started') {
         setTimeout(playNextCycle, 3000)
@@ -426,6 +438,16 @@ function EmbedView() {
         }, duration * 1000)
       }
     }
+    viewer.addEventListener('load', () => {
+      const animations = viewer.availableAnimations
+      if (animations && animations.length > 0) {
+        viewer.animationName = animations[0]
+        setTimeout(() => {
+          viewer.currentTime = viewer.duration
+          viewer.pause()
+        }, 100)
+      }
+    })
     viewer.addEventListener('ar-status', (e) => {
       if (e.detail.status === 'session-started') {
         loopTimeout = setTimeout(playNextCycle, 3000)
