@@ -433,7 +433,6 @@ function MainView() {
         ref={arViewerRef}
         src={modelUrl}
         ar
-        autoplay
         ar-scale="fixed"
         ar-modes="scene-viewer quick-look"
         animation-name="gasmate outdoor kitchen022|Take 001|BaseLayer"
@@ -613,7 +612,6 @@ function EmbedView() {
         ref={arViewerRef}
         src={modelUrl}
         ar
-        autoplay
         ar-scale="fixed"
         ar-modes="scene-viewer quick-look"
         animation-name="gasmate outdoor kitchen022|Take 001|BaseLayer"
