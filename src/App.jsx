@@ -86,17 +86,15 @@ function Model({ url, onCentered, playAnimation, ...props }) {
   const { scene, animations } = useGLTF(url)
   const groupRef = useRef()
   const { actions, names } = useAnimations(animations, scene)
-  const isOpenRef = useRef(false) // Initially Closed (at the end of animation)
+  const isOpenRef = useRef(false) // Initially Closed (frame 0 = closed now)
 
-  // Initially set to the end of the animation (Closed state)
+  // Initially stop all animations at frame 0 (closed state)
   useEffect(() => {
     if (names.length > 0) {
       names.forEach(name => {
         const action = actions[name]
         if (action) {
-          action.reset().play()
-          action.paused = true
-          action.time = action.getClip().duration
+          action.reset().stop()
         }
       })
     }
@@ -114,15 +112,14 @@ function Model({ url, onCentered, playAnimation, ...props }) {
           action.clampWhenFinished = true
           
           if (currentlyOpen) {
-            // Open -> Close: Play forward (starts from 0)
-            action.setEffectiveTimeScale(1)
-            action.paused = false
-            action.play()
-          } else {
-            // Closed -> Open: Play backward (starts from duration)
+            // Open -> Close: Play backward (from end back to 0)
             action.setEffectiveTimeScale(-1)
             action.paused = false
             action.play()
+          } else {
+            // Closed -> Open: Play forward (from 0 to end)
+            action.setEffectiveTimeScale(1)
+            action.reset().play()
           }
         }
       })
@@ -182,74 +179,63 @@ function MainView() {
     const viewer = arViewerRef.current
     if (!viewer) return
     let loopTimeout
-    let reverseRaf
 
-    // Smoothly animate currentTime backwards (closed -> open)
-    const reversePlay = (viewer, onComplete) => {
-      const startTime = performance.now()
-      const startCT = viewer.duration
-      const animDur = viewer.duration || 2
-      viewer.pause()
-      viewer.currentTime = startCT
-
-      const step = (now) => {
-        const elapsed = (now - startTime) / 1000
-        const progress = Math.min(elapsed / animDur, 1)
-        viewer.currentTime = startCT * (1 - progress)
-        if (progress < 1) {
-          reverseRaf = requestAnimationFrame(step)
-        } else {
-          viewer.currentTime = 0
-          if (onComplete) onComplete()
-        }
-      }
-      reverseRaf = requestAnimationFrame(step)
-    }
-
-    // Full cycle: open (reverse) -> wait -> close (forward) -> wait -> repeat
+    // Full cycle: wait -> open (forward play) -> wait -> close (reverse via currentTime) -> repeat
     const playCycle = () => {
-      // Step 1: Reverse play to open the grill
-      reversePlay(viewer, () => {
-        // Step 2: Wait 2-3s with grill open
+      // Play forward: closed -> open
+      viewer.currentTime = 0
+      viewer.play()
+      const dur = viewer.duration || 2
+
+      // After the open animation finishes, wait 3s then close
+      setTimeout(() => {
+        viewer.pause()
+        // Wait 3s with grill open, then smoothly close
         loopTimeout = setTimeout(() => {
-          // Step 3: Play forward to close the grill
-          viewer.currentTime = 0
-          viewer.play()
-          const dur = viewer.duration || 2
-          // Step 4: Wait for close animation to finish, then wait 2-3s
-          setTimeout(() => {
-            viewer.pause()
-            loopTimeout = setTimeout(playCycle, 3000)
-          }, dur * 1000)
-        }, 2500)
-      })
+          // Reverse: smoothly go from open (end) back to closed (0)
+          const startTime = performance.now()
+          const startCT = viewer.duration
+          const animDur = viewer.duration || 2
+
+          const step = (now) => {
+            const elapsed = (now - startTime) / 1000
+            const progress = Math.min(elapsed / animDur, 1)
+            viewer.currentTime = startCT * (1 - progress)
+            if (progress < 1) {
+              requestAnimationFrame(step)
+            } else {
+              viewer.currentTime = 0
+              viewer.pause()
+              // Wait 2s then repeat
+              loopTimeout = setTimeout(playCycle, 2000)
+            }
+          }
+          requestAnimationFrame(step)
+        }, 3000)
+      }, dur * 1000)
     }
 
-    // On load: seek to closed state (end of animation)
+    // On load: ensure we start at frame 0 (closed)
     viewer.addEventListener('load', () => {
       const animations = viewer.availableAnimations
       if (animations && animations.length > 0) {
         viewer.animationName = animations[0]
-        setTimeout(() => {
-          viewer.currentTime = viewer.duration
-          viewer.pause()
-        }, 200)
+        viewer.currentTime = 0
+        viewer.pause()
       }
     })
 
-    // On AR session start: wait 2s then begin the loop
+    // On AR session: wait 2s then begin loop
     viewer.addEventListener('ar-status', (e) => {
       if (e.detail.status === 'session-started') {
         loopTimeout = setTimeout(playCycle, 2000)
       } else if (e.detail.status === 'not-presenting') {
         clearTimeout(loopTimeout)
-        cancelAnimationFrame(reverseRaf)
       }
     })
 
     return () => {
       clearTimeout(loopTimeout)
-      cancelAnimationFrame(reverseRaf)
     }
   }, [])
 
@@ -340,8 +326,8 @@ function MainView() {
               makeDefault
               target={[0, 0, 0]}
               enablePan={false}
-              minDistance={1}
-              maxDistance={12}
+              minDistance={0.2}
+              maxDistance={20}
             />
           </Canvas>
 
@@ -445,8 +431,9 @@ function MainView() {
         ref={arViewerRef}
         src={modelUrl}
         ar
+        autoplay
         ar-scale="fixed"
-        ar-modes="scene-viewer webxr quick-look"
+        ar-modes="scene-viewer quick-look"
         animation-name="gasmate outdoor kitchen022|Take 001|BaseLayer"
         style={{ position: 'absolute', width: '1px', height: '1px', opacity: 0, pointerEvents: 'none', overflow: 'hidden' }}
       />
@@ -469,51 +456,42 @@ function EmbedView() {
     const viewer = arViewerRef.current
     if (!viewer) return
     let loopTimeout
-    let reverseRaf
-
-    const reversePlay = (viewer, onComplete) => {
-      const startTime = performance.now()
-      const startCT = viewer.duration
-      const animDur = viewer.duration || 2
-      viewer.pause()
-      viewer.currentTime = startCT
-
-      const step = (now) => {
-        const elapsed = (now - startTime) / 1000
-        const progress = Math.min(elapsed / animDur, 1)
-        viewer.currentTime = startCT * (1 - progress)
-        if (progress < 1) {
-          reverseRaf = requestAnimationFrame(step)
-        } else {
-          viewer.currentTime = 0
-          if (onComplete) onComplete()
-        }
-      }
-      reverseRaf = requestAnimationFrame(step)
-    }
 
     const playCycle = () => {
-      reversePlay(viewer, () => {
+      viewer.currentTime = 0
+      viewer.play()
+      const dur = viewer.duration || 2
+
+      setTimeout(() => {
+        viewer.pause()
         loopTimeout = setTimeout(() => {
-          viewer.currentTime = 0
-          viewer.play()
-          const dur = viewer.duration || 2
-          setTimeout(() => {
-            viewer.pause()
-            loopTimeout = setTimeout(playCycle, 3000)
-          }, dur * 1000)
-        }, 2500)
-      })
+          const startTime = performance.now()
+          const startCT = viewer.duration
+          const animDur = viewer.duration || 2
+
+          const step = (now) => {
+            const elapsed = (now - startTime) / 1000
+            const progress = Math.min(elapsed / animDur, 1)
+            viewer.currentTime = startCT * (1 - progress)
+            if (progress < 1) {
+              requestAnimationFrame(step)
+            } else {
+              viewer.currentTime = 0
+              viewer.pause()
+              loopTimeout = setTimeout(playCycle, 2000)
+            }
+          }
+          requestAnimationFrame(step)
+        }, 3000)
+      }, dur * 1000)
     }
 
     viewer.addEventListener('load', () => {
       const animations = viewer.availableAnimations
       if (animations && animations.length > 0) {
         viewer.animationName = animations[0]
-        setTimeout(() => {
-          viewer.currentTime = viewer.duration
-          viewer.pause()
-        }, 200)
+        viewer.currentTime = 0
+        viewer.pause()
       }
     })
 
@@ -522,13 +500,11 @@ function EmbedView() {
         loopTimeout = setTimeout(playCycle, 2000)
       } else if (e.detail.status === 'not-presenting') {
         clearTimeout(loopTimeout)
-        cancelAnimationFrame(reverseRaf)
       }
     })
 
     return () => {
       clearTimeout(loopTimeout)
-      cancelAnimationFrame(reverseRaf)
     }
   }, [])
 
@@ -559,7 +535,7 @@ function EmbedView() {
           <ContactShadows position={[0, -0.5, 0]} opacity={0.4} scale={20} blur={1.5} far={4} color="#000" />
           <Environment files="/cedar_bridge_sunset_1_4k.hdr" environmentIntensity={1.8} />
         </Suspense>
-        <OrbitControls makeDefault target={[0, 0, 0]} enablePan={false} minDistance={1} maxDistance={12} />
+        <OrbitControls makeDefault target={[0, 0, 0]} enablePan={false} minDistance={0.2} maxDistance={20} />
       </Canvas>
 
       <div style={{
@@ -635,8 +611,9 @@ function EmbedView() {
         ref={arViewerRef}
         src={modelUrl}
         ar
+        autoplay
         ar-scale="fixed"
-        ar-modes="scene-viewer webxr quick-look"
+        ar-modes="scene-viewer quick-look"
         animation-name="gasmate outdoor kitchen022|Take 001|BaseLayer"
         style={{ position: 'absolute', width: '1px', height: '1px', opacity: 0, pointerEvents: 'none', overflow: 'hidden' }}
       />
