@@ -94,7 +94,9 @@ function Model({ url, onCentered, playAnimation, ...props }) {
       names.forEach(name => {
         const action = actions[name]
         if (action) {
-          action.reset().stop()
+          action.reset().play()
+          action.paused = true
+          action.time = 0
         }
       })
     }
@@ -164,7 +166,7 @@ function Model({ url, onCentered, playAnimation, ...props }) {
 // --- MAIN APP COMPONENT ---
 
 function MainView() {
-  const modelUrl = '/American outdoor animation grill.glb'
+  const modelUrl = '/American outdoor animation grill.glb?v=3'
   const arViewerRef = useRef(null)
   const [showQR, setShowQR] = useState(false)
   const [currentUrl, setCurrentUrl] = useState('')
@@ -442,7 +444,7 @@ function MainView() {
 }
 
 function EmbedView() {
-  const modelUrl = '/American outdoor animation grill.glb'
+  const modelUrl = '/American outdoor animation grill.glb?v=3'
   const arViewerRef = useRef(null)
   const [showQR, setShowQR] = useState(false)
   const [currentUrl, setCurrentUrl] = useState('')
