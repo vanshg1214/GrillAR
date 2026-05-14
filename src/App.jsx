@@ -218,13 +218,11 @@ function MainView() {
       }, dur * 1000)
     }
 
-    // On load: ensure we start at frame 0 (closed)
+    // On load: just set the animation name, let autoplay/loop handle the rest
     viewer.addEventListener('load', () => {
       const animations = viewer.availableAnimations
       if (animations && animations.length > 0) {
         viewer.animationName = animations[0]
-        viewer.currentTime = 0
-        viewer.pause()
       }
     })
 
@@ -493,8 +491,6 @@ function EmbedView() {
       const animations = viewer.availableAnimations
       if (animations && animations.length > 0) {
         viewer.animationName = animations[0]
-        viewer.currentTime = 0
-        viewer.pause()
       }
     })
 
